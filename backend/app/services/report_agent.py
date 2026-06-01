@@ -586,7 +586,7 @@ Please output the report outline in JSON format as follows:
 }
 
 Note: sections array must have at least 2 and at most 5 elements!
-IMPORTANT: The entire report outline (title, summary, section titles and descriptions) MUST be in English. Never use Chinese or other languages."""
+IMPORTANT: The entire report outline (title, summary, section titles and descriptions) MUST be in Chinese. Never use English or other languages unless quoting fixed technical terms."""
 
 PLAN_USER_PROMPT_TEMPLATE = """\
 [Prediction Scenario Settings]
@@ -652,13 +652,13 @@ Your task is to:
      > "Certain groups will state: original content..."
    - These quotes are core evidence of simulation predictions
 
-3. [Language Consistency - ALWAYS Write in English]
-   - The entire report MUST be written in English, regardless of source material language
-   - Tool-returned content may contain Chinese, mixed Chinese-English, or other languages
-   - When quoting tool-returned non-English content, ALWAYS translate it to fluent English before writing to report
-   - Keep original meaning unchanged during translation, ensure natural expression
-   - This rule applies to both body text and quoted content (> format)
-   - NEVER switch to Chinese or any other language mid-report
+3. [语言一致性 - 始终使用中文]
+   - 整篇报告必须使用中文撰写，除非是固定技术名词或必要的专有名词
+   - 工具返回内容可能包含中文、英文或中英混合内容
+   - 当引用工具返回的英文内容时，优先翻译成自然、准确的中文后再写入报告
+   - 翻译时保持原意不变，表达自然
+   - 该规则同时适用于正文和引用内容（> 格式）
+   - 不要在报告中途切换为英文整段输出
 
 4. [Faithfully Present Prediction Results]
    - Report content must reflect simulation results that represent the future in the simulated world
@@ -854,7 +854,7 @@ Prediction Condition: {simulation_requirement}
 - Concise and direct, don't write lengthy passages
 - Use > format to quote key content
 - Give conclusions first, then explain reasons
-- ALWAYS respond in English, regardless of the language used in source material or report content"""
+- 始终使用中文回答，除非必须保留固定技术名词原文"""
 
 CHAT_OBSERVATION_SUFFIX = "\n\nPlease answer the question concisely."
 
@@ -1201,7 +1201,7 @@ class ReportAgent:
                 ))
             
             outline = ReportOutline(
-                title=response.get("title", "Simulation Analysis Report"),
+                title=response.get("title", "模拟推演分析报告"),
                 summary=response.get("summary", ""),
                 sections=sections
             )
@@ -1216,12 +1216,12 @@ class ReportAgent:
             logger.error(f"Outline planning failed: {str(e)}")
             # Return default outline (3 sections as fallback)
             return ReportOutline(
-                title="Future Prediction Report",
-                summary="Future trends and risk analysis based on simulation predictions",
+                title="模拟推演分析报告",
+                summary="基于模拟推演结果的趋势与风险分析",
                 sections=[
-                    ReportSection(title="Prediction Scenario and Core Findings"),
-                    ReportSection(title="Crowd Behavior Prediction Analysis"),
-                    ReportSection(title="Trend Outlook and Risk Warning")
+                    ReportSection(title="推演情境与核心发现"),
+                    ReportSection(title="群体行为与反馈分析"),
+                    ReportSection(title="趋势展望与风险预警")
                 ]
             )
     
@@ -1836,7 +1836,14 @@ class ReportAgent:
                 messages=messages,
                 temperature=0.5
             )
-            
+
+            if response is None:
+                return {
+                    "response": "当前无法生成回复：模型返回为空，请稍后重试。",
+                    "tool_calls": tool_calls_made,
+                    "sources": [tc.get("parameters", {}).get("query", "") for tc in tool_calls_made]
+                }
+
             # parseTool call
             tool_calls = self._parse_tool_calls(response)
             
@@ -1876,11 +1883,18 @@ class ReportAgent:
             messages=messages,
             temperature=0.5
         )
-        
+
+        if final_response is None:
+            return {
+                "response": "当前无法生成回复：模型返回为空，请稍后重试。",
+                "tool_calls": tool_calls_made,
+                "sources": [tc.get("parameters", {}).get("query", "") for tc in tool_calls_made]
+            }
+
         # cleanresponse
         clean_response = re.sub(r'<tool_call>.*?</tool_call>', '', final_response, flags=re.DOTALL)
         clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', clean_response)
-        
+
         return {
             "response": clean_response.strip(),
             "tool_calls": tool_calls_made,

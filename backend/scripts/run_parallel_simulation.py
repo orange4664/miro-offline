@@ -1034,6 +1034,7 @@ def create_model(config: Dict[str, Any], use_boost: bool = False):
     return ModelFactory.create(
         model_platform=ModelPlatformType.OPENAI,
         model_type=llm_model,
+        default_headers={"User-Agent": "curl/8.5.0"},
     )
 
 

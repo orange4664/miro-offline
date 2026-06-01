@@ -194,7 +194,8 @@ class OasisProfileGenerator:
 
         self.client = OpenAI(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
+            default_headers={"User-Agent": "curl/8.5.0"}
         )
 
         # GraphStorage for hybrid search enrichment

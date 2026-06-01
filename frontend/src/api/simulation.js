@@ -173,7 +173,11 @@ export const getEnvStatus = (data) => {
  * @param {Object} data - { simulation_id, interviews: [{ agent_id, prompt }] }
  */
 export const interviewAgents = (data) => {
-  return requestWithRetry(() => service.post('/api/simulation/interview/batch', data), 3, 1000)
+  // Interview/survey requests are long-running commands against the live OASIS
+  // environment. If they fail because the environment is closed or the model
+  // rejects the request, retrying makes the UI spin for a long time without
+  // improving the outcome. Surface the real backend error immediately.
+  return service.post('/api/simulation/interview/batch', data)
 }
 
 /**

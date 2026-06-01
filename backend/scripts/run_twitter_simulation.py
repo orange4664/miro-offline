@@ -457,6 +457,7 @@ class TwitterSimulationRunner:
         return ModelFactory.create(
             model_platform=ModelPlatformType.OPENAI,
             model_type=llm_model,
+            default_headers={"User-Agent": "curl/8.5.0"},
         )
     
     def _get_active_agents_for_round(

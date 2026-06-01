@@ -1174,7 +1174,12 @@ Return the sub-questions as a JSON list."""
             if not api_result.get("success", False):
                 error_msg = api_result.get("error", "Unknown error")
                 logger.warning(f"Interview API call failed: {error_msg}")
-                result.summary = f"Interview API call failed: {error_msg}. Please check the OASIS simulation environment status."
+                result.summary = (
+                    f"采访接口调用失败：{error_msg}。当前未能从模拟世界中的 Agent 获得有效采访结果。"
+                    f"请检查 OASIS 模拟环境是否正常运行，以及模型接口是否可用。"
+                )
+                result.interviewed_count = 0
+                result.interviews = []
                 return result
 
             # Step 5: Parse API response

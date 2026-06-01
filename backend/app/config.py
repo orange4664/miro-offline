@@ -38,8 +38,11 @@ class Config:
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', 'mirofish')
 
     # Embedding configuration
+    EMBEDDING_PROVIDER = os.environ.get('EMBEDDING_PROVIDER', 'ollama').lower()
     EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'nomic-embed-text')
     EMBEDDING_BASE_URL = os.environ.get('EMBEDDING_BASE_URL', 'http://localhost:11434')
+    EMBEDDING_API_KEY = os.environ.get('EMBEDDING_API_KEY', '')
+    EMBEDDING_DIMENSION = int(os.environ.get('EMBEDDING_DIMENSION', '768'))
 
     # File upload configuration
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB

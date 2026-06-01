@@ -34,6 +34,7 @@ class LLMClient:
             api_key=self.api_key,
             base_url=self.base_url,
             timeout=timeout,
+            default_headers={"User-Agent": "curl/8.5.0"},
         )
 
         # Ollama context window size — prevents prompt truncation.
