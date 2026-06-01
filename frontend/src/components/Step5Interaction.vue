@@ -743,10 +743,11 @@ const sendToAgent = async (message) => {
     const agentId = selectedAgentIndex.value
 
     if (typeof resultsDict === 'object' && !Array.isArray(resultsDict)) {
-      // Prefer reddit platform response, then twitter
+      // Compatible with keys: reddit_<id> / twitter_<id> / plain "<id>" (offline disk-backed)
       const redditKey = `reddit_${agentId}`
       const twitterKey = `twitter_${agentId}`
-      const agentResult = resultsDict[redditKey] || resultsDict[twitterKey] || Object.values(resultsDict)[0]
+      const plainKey = String(agentId)
+      const agentResult = resultsDict[redditKey] || resultsDict[twitterKey] || resultsDict[plainKey] || Object.values(resultsDict)[0]
       if (agentResult) {
         responseContent = agentResult.response || agentResult.answer
       }
@@ -833,9 +834,11 @@ const submitSurvey = async () => {
         let responseContent = 'No response'
 
         if (typeof resultsDict === 'object' && !Array.isArray(resultsDict)) {
+          // Compatible with keys: reddit_<id> / twitter_<id> / plain "<id>" (offline disk-backed)
           const redditKey = `reddit_${agentIdx}`
           const twitterKey = `twitter_${agentIdx}`
-          const agentResult = resultsDict[redditKey] || resultsDict[twitterKey]
+          const plainKey = String(agentIdx)
+          const agentResult = resultsDict[redditKey] || resultsDict[twitterKey] || resultsDict[plainKey]
           if (agentResult) {
             responseContent = agentResult.response || agentResult.answer || 'No response'
           }
