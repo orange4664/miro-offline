@@ -268,20 +268,46 @@ class SimulationIPCClient:
     
     def check_env_alive(self) -> bool:
         """
-        Check if simulation environment is alive
-        
-        Judge by checking env_status.json file
+        Check if simulation environment is alive.
+
+        Reads env_status.json. A live waiting environment refreshes the
+        timestamp every few seconds (heartbeat). If the status says "alive"
+        but the timestamp is older than ENV_HEARTBEAT_TIMEOUT seconds, the
+        environment process is considered dead/gone (e.g. backend restarted,
+        OASIS process killed) and we return False quickly instead of letting
+        callers block until command timeout.
         """
         status_file = os.path.join(self.simulation_dir, "env_status.json")
         if not os.path.exists(status_file):
             return False
-        
+
         try:
             with open(status_file, 'r', encoding='utf-8') as f:
                 status = json.load(f)
-            return status.get("status") == "alive"
         except (json.JSONDecodeError, OSError):
             return False
+
+        if status.get("status") != "alive":
+            return False
+
+        # Heartbeat freshness check
+        ENV_HEARTBEAT_TIMEOUT = 180  # seconds
+        ts = status.get("timestamp")
+        if ts:
+            try:
+                last = datetime.fromisoformat(ts)
+                age = (datetime.now() - last).total_seconds()
+                if age > ENV_HEARTBEAT_TIMEOUT:
+                    logger.warning(
+                        f"env_status is 'alive' but stale ({int(age)}s old) — "
+                        f"treating environment as not running"
+                    )
+                    return False
+            except (ValueError, TypeError):
+                # Unparseable timestamp: fall back to trusting the status flag
+                pass
+
+        return True
 
 
 class SimulationIPCServer:

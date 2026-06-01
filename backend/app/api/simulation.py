@@ -2219,16 +2219,13 @@ def interview_agent():
                 "error": "platform Parameter can only be 'twitter' Or 'reddit'"
             }), 400
         
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is started and wait for it to progress."
-            }), 400
-        
+        # Note: do NOT hard-reject when the live env is down. SimulationRunner
+        # falls back to a disk-backed interview (personas + DB) so this still
+        # works for finished/older simulations.
+
         # Optimizeprompt，Add prefix to avoidAgent call tools
         optimized_prompt = optimize_interview_prompt(prompt)
-        
+
         result = SimulationRunner.interview_agent(
             simulation_id=simulation_id,
             agent_id=agent_id,
@@ -2354,12 +2351,9 @@ def interview_agents_batch():
                     "error": f"Interview list item {i+1}: platform must be 'twitter' or 'reddit'"
                 }), 400
 
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is started and wait for it to progress."
-            }), 400
+        # Note: do NOT hard-reject when the live env is down. SimulationRunner
+        # falls back to a disk-backed interview so surveys still work for
+        # finished/older simulations.
 
         # OptimizeEachInterview itemprompt，Add prefix to avoidAgent call tools
         optimized_interviews = []
@@ -2461,12 +2455,9 @@ def interview_all_agents():
                 "error": "platform Parameter can only be 'twitter' Or 'reddit'"
             }), 400
 
-        # Check environment status
-        if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is started and wait for it to progress."
-            }), 400
+        # Note: do NOT hard-reject when the live env is down. SimulationRunner
+        # falls back to a disk-backed interview so global surveys still work
+        # for finished/older simulations.
 
         # Optimizeprompt，Add prefix to avoidAgent call tools
         optimized_prompt = optimize_interview_prompt(prompt)

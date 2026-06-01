@@ -1458,7 +1458,23 @@ class SimulationRunner:
         ipc_client = SimulationIPCClient(sim_dir)
 
         if not ipc_client.check_env_alive():
-            raise ValueError(f"Simulation environment not running or closed, cannot execute Interview: {simulation_id}")
+            # Live env gone — fall back to disk-backed interview.
+            logger.warning(
+                f"Env not alive for {simulation_id}; using offline disk-backed interview (single)"
+            )
+            from .offline_interview import OfflineInterviewService
+            offline = OfflineInterviewService(simulation_id)
+            batch = offline.interview_batch([{"agent_id": agent_id, "prompt": prompt}])
+            r = (batch.get("result", {}) or {}).get("results", {}).get(str(agent_id), {})
+            ok = bool(r.get("response", "").strip())
+            return {
+                "success": ok,
+                "agent_id": agent_id,
+                "prompt": prompt,
+                "result": {"agent_id": agent_id, "response": r.get("response", ""), "platform": "offline"},
+                "error": None if ok else r.get("error", "offline interview failed"),
+                "mode": "offline",
+            }
 
         logger.info(f"Send Interview command: simulation_id={simulation_id}, agent_id={agent_id}, platform={platform}")
 
@@ -1520,7 +1536,22 @@ class SimulationRunner:
         ipc_client = SimulationIPCClient(sim_dir)
 
         if not ipc_client.check_env_alive():
-            raise ValueError(f"Simulation environment not running or closed, cannot execute Interview: {simulation_id}")
+            # Live OASIS env is gone (backend restarted, process killed, etc.).
+            # Fall back to a disk-backed interview reconstructed from the saved
+            # personas + simulation DB, so "send survey" still works instead of
+            # erroring out or hanging.
+            logger.warning(
+                f"Env not alive for {simulation_id}; using offline disk-backed interview"
+            )
+            from .offline_interview import OfflineInterviewService
+            offline = OfflineInterviewService(simulation_id)
+            result = offline.interview_batch(interviews)
+            return {
+                "success": result.get("success", False),
+                "interviews_count": result.get("interviews_count", len(interviews)),
+                "result": result.get("result"),
+                "mode": "offline",
+            }
 
         logger.info(f"Send batch Interview command: simulation_id={simulation_id}, count={len(interviews)}, platform={platform}")
 

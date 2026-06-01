@@ -1610,13 +1610,21 @@ async def main():
             reddit_agent_graph=reddit_result.agent_graph if reddit_result else None
         )
         ipc_handler.update_status("alive")
-        
+
         # Command wait loop (using global _shutdown_event)
         try:
+            import time as _time
+            _last_heartbeat = _time.time()
             while not _shutdown_event.is_set():
                 should_continue = await ipc_handler.process_commands()
                 if not should_continue:
                     break
+                # Refresh heartbeat (~ every 5s) so a live waiting env keeps a
+                # fresh timestamp; a dead env's timestamp goes stale and the
+                # backend can detect it instead of waiting until timeout.
+                if _time.time() - _last_heartbeat >= 5:
+                    ipc_handler.update_status("alive")
+                    _last_heartbeat = _time.time()
                 # Use wait_for instead of sleep to respond to shutdown_event
                 try:
                     await asyncio.wait_for(_shutdown_event.wait(), timeout=0.5)
