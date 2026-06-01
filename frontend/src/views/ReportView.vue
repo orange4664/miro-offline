@@ -30,6 +30,15 @@
           <span class="dot"></span>
           {{ statusText }}
         </span>
+        <button
+          v-if="currentStatus === 'error'"
+          class="retry-btn"
+          :disabled="retrying"
+          @click="retryGenerate"
+          title="保留已生成的部分，只重跑失败/缺失的段落"
+        >
+          {{ retrying ? '重试中…' : '继续生成 / 重试' }}
+        </button>
       </div>
     </header>
 
@@ -62,13 +71,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GraphPanel from '../components/GraphPanel.vue'
 import Step4Report from '../components/Step4Report.vue'
 import { getProject, getGraphData } from '../api/graph'
 import { getSimulation } from '../api/simulation'
-import { getReport } from '../api/report'
+import { getReport, retryReport } from '../api/report'
 
 const route = useRoute()
 const router = useRouter()
@@ -89,6 +98,7 @@ const graphData = ref(null)
 const graphLoading = ref(false)
 const systemLogs = ref([])
 const currentStatus = ref('processing') // processing | completed | error
+const retrying = ref(false)
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -125,6 +135,31 @@ const addLog = (msg) => {
 
 const updateStatus = (status) => {
   currentStatus.value = status
+}
+
+// Resume/retry a failed report: keep finished sections, only redo missing ones.
+const retryGenerate = async () => {
+  if (!currentReportId.value || retrying.value) return
+  retrying.value = true
+  addLog('开始续传/重试报告生成（保留已完成段落）...')
+  try {
+    const res = await retryReport(currentReportId.value)
+    if (res.success) {
+      currentStatus.value = 'processing'
+      addLog('重试任务已启动，正在继续生成…')
+      // Re-trigger Step4Report's polling by re-setting the reportId
+      const id = currentReportId.value
+      currentReportId.value = null
+      await nextTick()
+      currentReportId.value = id
+    } else {
+      addLog(`重试启动失败: ${res.error || '未知错误'}`)
+    }
+  } catch (err) {
+    addLog(`重试启动失败: ${err.message}`)
+  } finally {
+    retrying.value = false
+  }
 }
 
 // --- Layout Methods ---
@@ -324,6 +359,21 @@ onMounted(() => {
 .status-indicator.processing .dot { background: #FF9800; animation: pulse 1s infinite; }
 .status-indicator.completed .dot { background: #4CAF50; }
 .status-indicator.error .dot { background: #F44336; }
+
+.retry-btn {
+  margin-left: 12px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #F44336;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.retry-btn:hover:not(:disabled) { background: #d32f2f; }
+.retry-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @keyframes pulse { 50% { opacity: 0.5; } }
 

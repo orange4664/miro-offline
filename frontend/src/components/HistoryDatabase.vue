@@ -172,11 +172,11 @@
               <button
                 class="modal-btn btn-report"
                 @click="goToReport"
-                :disabled="!selectedProject.report_id"
+                :disabled="reportBtnLoading"
               >
                 <span class="btn-step">Step4</span>
                 <span class="btn-icon">◆</span>
-                <span class="btn-text">Analysis Report</span>
+                <span class="btn-text">{{ reportBtnLoading ? '生成中…' : (selectedProject.report_id ? 'Analysis Report' : '生成报告') }}</span>
               </button>
             </div>
             <!-- Playback unavailable notice -->
@@ -194,6 +194,7 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getSimulationHistory } from '../api/simulation'
+import { generateReport } from '../api/report'
 
 const router = useRouter()
 const route = useRoute()
@@ -205,6 +206,7 @@ const isExpanded = ref(false)
 const hoveringCard = ref(null)
 const historyContainer = ref(null)
 const selectedProject = ref(null)  // Currently selected project (for modal)
+const reportBtnLoading = ref(false)  // Step4 report button loading state
 let observer = null
 let isAnimating = false  // Animation lock to prevent flickering
 let expandDebounceTimer = null  // Debounce timer
@@ -424,13 +426,34 @@ const goToSimulation = () => {
 }
 
 // Navigate to Analysis Report page (Report)
-const goToReport = () => {
-  if (selectedProject.value?.report_id) {
-    router.push({
-      name: 'Report',
-      params: { reportId: selectedProject.value.report_id }
-    })
+// - If a report already exists: open it directly.
+// - If not: kick off generation for this simulation, then open the report
+//   page (which will show live progress / allow retry).
+const goToReport = async () => {
+  const proj = selectedProject.value
+  if (!proj) return
+
+  if (proj.report_id) {
+    router.push({ name: 'Report', params: { reportId: proj.report_id } })
     closeModal()
+    return
+  }
+
+  if (!proj.simulation_id) return
+  reportBtnLoading.value = true
+  try {
+    const res = await generateReport({ simulation_id: proj.simulation_id })
+    const reportId = res?.data?.report_id
+    if (res.success && reportId) {
+      router.push({ name: 'Report', params: { reportId } })
+      closeModal()
+    } else {
+      alert('生成报告启动失败：' + (res.error || '未知错误'))
+    }
+  } catch (e) {
+    alert('生成报告启动失败：' + (e.message || e))
+  } finally {
+    reportBtnLoading.value = false
   }
 }
 

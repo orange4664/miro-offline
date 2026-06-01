@@ -9,6 +9,15 @@ export const generateReport = (data) => {
 }
 
 /**
+ * Resume/retry a failed or partial report (keeps finished sections,
+ * only regenerates missing ones).
+ * @param {string} reportId
+ */
+export const retryReport = (reportId) => {
+  return service.post(`/api/report/${reportId}/retry`)
+}
+
+/**
  * Get report generation status
  * @param {string} reportId
  */

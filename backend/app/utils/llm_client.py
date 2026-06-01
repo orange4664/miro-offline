@@ -7,10 +7,14 @@ Supports Ollama num_ctx parameter to prevent prompt truncation
 import json
 import os
 import re
+import time
+import logging
 from typing import Optional, Dict, Any, List
 from openai import OpenAI
 
 from ..config import Config
+
+logger = logging.getLogger('mirofish.llm_client')
 
 
 class LLMClient:
@@ -80,11 +84,36 @@ class LLMClient:
                 "options": {"num_ctx": self._num_ctx}
             }
 
-        response = self.client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content
-        # Some models (like MiniMax M2.5) include <think>thinking content in response, need to remove
-        content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
-        return content
+        # Retry on transient errors (rate limit, temporary key disable,
+        # network blips, 5xx). A single failure mid-report should not kill
+        # the whole generation.
+        max_retries = int(os.environ.get('LLM_MAX_RETRIES', '5'))
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+                content = response.choices[0].message.content
+                # Some models (like MiniMax M2.5) include <think>thinking content, remove it
+                content = re.sub(r'<think>[\s\S]*?</think>', '', content or '').strip()
+                return content
+            except Exception as e:
+                last_error = e
+                msg = str(e)
+                # Don't waste retries on errors that won't fix themselves
+                non_retryable = (
+                    'model_not_found' in msg
+                    or 'invalid_request' in msg
+                    or 'context_length' in msg
+                )
+                if non_retryable or attempt == max_retries - 1:
+                    break
+                wait = min(2 ** attempt, 30)
+                logger.warning(
+                    f"LLM call failed (attempt {attempt + 1}/{max_retries}): {msg[:160]} — retrying in {wait}s"
+                )
+                time.sleep(wait)
+
+        raise RuntimeError(f"LLM call failed after {max_retries} attempts: {last_error}")
 
     def chat_json(
         self,

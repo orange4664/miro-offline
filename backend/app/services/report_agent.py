@@ -1538,9 +1538,10 @@ class ReportAgent:
         return final_answer
     
     def generate_report(
-        self, 
+        self,
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
-        report_id: Optional[str] = None
+        report_id: Optional[str] = None,
+        resume: bool = False
     ) -> Report:
         """
         Generate complete report (realtime output per section)
@@ -1615,11 +1616,24 @@ class ReportAgent:
             
             if progress_callback:
                 progress_callback("planning", 0, "Start planning report outline...")
-            
-            outline = self.plan_outline(
-                progress_callback=lambda stage, prog, msg: 
-                    progress_callback(stage, prog // 5, msg) if progress_callback else None
-            )
+
+            # Resume mode: reuse the saved outline instead of re-planning,
+            # so already-written sections can be kept.
+            outline = None
+            if resume:
+                try:
+                    existing = ReportManager.get_report(report_id)
+                    if existing and existing.outline and existing.outline.sections:
+                        outline = existing.outline
+                        logger.info(f"[resume] reuse existing outline: {report_id} ({len(outline.sections)} sections)")
+                except Exception as e:
+                    logger.warning(f"[resume] failed to load existing outline, will re-plan: {e}")
+
+            if outline is None:
+                outline = self.plan_outline(
+                    progress_callback=lambda stage, prog, msg:
+                        progress_callback(stage, prog // 5, msg) if progress_callback else None
+                )
             report.outline = outline
             
             # recordplancompletion log
@@ -1644,7 +1658,25 @@ class ReportAgent:
             for i, section in enumerate(outline.sections):
                 section_num = i + 1
                 base_progress = 20 + int((i / total_sections) * 70)
-                
+
+                # Resume mode: if this section was already written to disk with
+                # real content, reuse it and skip the LLM call entirely.
+                if resume:
+                    existing_content = ReportManager.load_section_content(report_id, section_num)
+                    if existing_content and len(existing_content.strip()) >= 30:
+                        section.content = existing_content
+                        generated_sections.append(f"## {section.title}\n\n{existing_content}")
+                        completed_section_titles.append(section.title)
+                        logger.info(f"[resume] skip already-written section {section_num}: {section.title}")
+                        ReportManager.update_progress(
+                            report_id, "generating",
+                            base_progress + int(70 / total_sections),
+                            f"Section {section.title} reused (resume)",
+                            current_section=None,
+                            completed_sections=completed_section_titles
+                        )
+                        continue
+
                 # Update progress
                 ReportManager.update_progress(
                     report_id, "generating", base_progress,
@@ -1964,6 +1996,28 @@ class ReportManager:
     def _get_section_path(cls, report_id: str, section_index: int) -> str:
         """getSectionMarkdownfile path"""
         return os.path.join(cls._get_report_folder(report_id), f"section_{section_index:02d}.md")
+
+    @classmethod
+    def load_section_content(cls, report_id: str, section_index: int) -> str:
+        """
+        Load the body content of a previously saved section (for resume).
+
+        Returns the section body with the leading "## Title" heading stripped,
+        or empty string if the file does not exist / is empty.
+        """
+        path = cls._get_section_path(report_id, section_index)
+        if not os.path.exists(path):
+            return ""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except OSError:
+            return ""
+        # Strip a leading "## ..." heading line if present (it is re-added on assembly)
+        lines = text.split('\n')
+        if lines and lines[0].lstrip().startswith('#'):
+            lines = lines[1:]
+        return '\n'.join(lines).strip()
     
     @classmethod
     def _get_agent_log_path(cls, report_id: str) -> str:
