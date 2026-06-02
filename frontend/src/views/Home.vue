@@ -4,11 +4,14 @@
     <nav class="navbar" :style="s.navbar">
       <div class="nav-brand" :style="s.navBrand">MIROFISH OFFLINE</div>
       <div class="nav-links" :style="s.navLinks">
+        <button class="settings-entry" @click="showSettings = true">⚙ 设置</button>
         <a href="https://github.com/nikmcfly/MiroFish-Offline" target="_blank" class="github-link" :style="s.githubLink">
           Visit our Github <span>↗</span>
         </a>
       </div>
     </nav>
+
+    <SettingsPanel v-if="showSettings" @close="showSettings = false" />
 
     <div class="main-content" :style="s.mainContent">
       <!-- Hero Section -->
@@ -147,6 +150,7 @@
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
+import SettingsPanel from '../components/SettingsPanel.vue'
 
 const mono = 'JetBrains Mono, monospace'
 const sans = 'Space Grotesk, Noto Sans SC, system-ui, sans-serif'
@@ -228,6 +232,7 @@ const steps = [
 const router = useRouter()
 
 const formData = ref({ simulationRequirement: '' })
+const showSettings = ref(false)
 const files = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -262,5 +267,19 @@ const startSimulation = () => {
   })
 }
 </script>
+
+<style scoped>
+.settings-entry {
+  margin-right: 16px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.settings-entry:hover { border-color: #ff7a00; color: #ff7a00; }
+</style>
 
 <!-- Styles loaded from Home.css via import -->

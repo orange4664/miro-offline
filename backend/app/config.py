@@ -83,3 +83,101 @@ class Config:
         if not cls.NEO4J_PASSWORD:
             errors.append("NEO4J_PASSWORD not configured")
         return errors
+
+    # Mapping of editable settings -> Config attribute name.
+    # Only these can be changed via the settings API.
+    _EDITABLE_KEYS = {
+        "LLM_API_KEY": "LLM_API_KEY",
+        "LLM_BASE_URL": "LLM_BASE_URL",
+        "LLM_MODEL_NAME": "LLM_MODEL_NAME",
+        "EMBEDDING_PROVIDER": "EMBEDDING_PROVIDER",
+        "EMBEDDING_MODEL": "EMBEDDING_MODEL",
+        "EMBEDDING_BASE_URL": "EMBEDDING_BASE_URL",
+        "EMBEDDING_API_KEY": "EMBEDDING_API_KEY",
+        "EMBEDDING_DIMENSION": "EMBEDDING_DIMENSION",
+        # OASIS/CAMEL reads OPENAI_* from env; keep them in sync with LLM_*
+        "OPENAI_API_KEY": "LLM_API_KEY",
+        "OPENAI_API_BASE_URL": "LLM_BASE_URL",
+    }
+
+    @classmethod
+    def apply_updates(cls, updates: dict):
+        """
+        Apply a dict of {ENV_KEY: value} to the in-memory Config class AND
+        os.environ (so subsequently spawned OASIS subprocesses inherit them).
+
+        - Keys not in _EDITABLE_KEYS are ignored.
+        - Empty / None values are skipped (keep existing — "leave default").
+        - EMBEDDING_DIMENSION is coerced to int.
+        Returns the dict of keys actually changed (env_key -> new value).
+        """
+        applied = {}
+        for env_key, raw in (updates or {}).items():
+            if env_key not in cls._EDITABLE_KEYS:
+                continue
+            if raw is None:
+                continue
+            value = str(raw).strip()
+            if value == "":
+                continue  # leave default / unchanged
+
+            attr = cls._EDITABLE_KEYS[env_key]
+            if attr == "EMBEDDING_DIMENSION":
+                try:
+                    setattr(cls, attr, int(value))
+                except ValueError:
+                    continue
+            elif attr == "EMBEDDING_PROVIDER":
+                setattr(cls, attr, value.lower())
+            else:
+                setattr(cls, attr, value)
+
+            # Mirror into the live process env so child processes inherit it
+            os.environ[env_key] = value
+            applied[env_key] = value
+        return applied
+
+    @classmethod
+    def env_file_path(cls):
+        """Absolute path to the project-root .env that should be persisted."""
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env'))
+
+    @classmethod
+    def persist_to_env_file(cls, updates: dict):
+        """
+        Persist {ENV_KEY: value} into the project-root .env, updating existing
+        lines in place and appending missing keys. Comments/blank lines and
+        unrelated keys are preserved. Empty values are skipped.
+        """
+        path = cls.env_file_path()
+        # Filter to editable, non-empty values
+        clean = {}
+        for k, v in (updates or {}).items():
+            if k in cls._EDITABLE_KEYS and v is not None and str(v).strip() != "":
+                clean[k] = str(v).strip()
+        if not clean:
+            return path
+
+        lines = []
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.read().splitlines()
+
+        remaining = dict(clean)
+        out = []
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped and not stripped.startswith('#') and '=' in stripped:
+                key = stripped.split('=', 1)[0].strip()
+                if key in remaining:
+                    out.append(f"{key}={remaining.pop(key)}")
+                    continue
+            out.append(line)
+
+        for key, val in remaining.items():
+            out.append(f"{key}={val}")
+
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(out) + '\n')
+        return path
+
